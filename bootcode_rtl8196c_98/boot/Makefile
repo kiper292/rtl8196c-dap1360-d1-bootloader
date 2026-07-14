@@ -5,7 +5,7 @@ include ../.config
 CROSS = mips-linux-
 #CROSS = rsdk-elf-
 
-OUTDIR	= ./Output
+OUTDIR	= ../bin
 
 SRC	= ./monitor
 
@@ -165,31 +165,31 @@ banner:	cr-output
 	@echo  \#define BOOT_CODE_TIME \"`date "+%Y.%m.%d-%H:%M%z"`\" > ./banner/mk_time	 	
 	
 cr-output:
-	@if [ ! -d Output ]; then \
-	mkdir Output; \
+	@if [ ! -d ../bin ]; then \
+	mkdir -p ../bin; \
 	fi
 
 
 wboot: banner $(OUTDIR)/wboot.out
-	$(NM)	./Output/wboot.out | sort > ./Output/wboot.nm
-	$(OBJCOPY) -g -Obinary ./Output/wboot.out ./Output/wboot.img
-	mips-linux-objdump -h -S ./Output/wboot.out > ./Output/wboot.text
+	$(NM)	$(OUTDIR)/wboot.out | sort > $(OUTDIR)/wboot.nm
+	$(OBJCOPY) -g -Obinary $(OUTDIR)/wboot.out $(OUTDIR)/wboot.img
+	mips-linux-objdump -h -S $(OUTDIR)/wboot.out > $(OUTDIR)/wboot.text
 
 
 #all :	"$(OUTDIR)" boot.out
 boot: banner $(OUTDIR)/boot.out
-	$(NM)	./Output/boot.out | sort > ./Output/boot.nm
-	# $(OBJCOPY) -g -Obinary ./Output/boot.out ./Output/boot.img
-	mips-linux-objcopy -g -Obinary ./Output/boot.out ./Output/boot.img
-	mips-linux-objdump -h -S ./Output/boot.out > ./Output/boot.text
+	$(NM)	$(OUTDIR)/boot.out | sort > $(OUTDIR)/boot.nm
+	# $(OBJCOPY) -g -Obinary $(OUTDIR)/boot.out $(OUTDIR)/boot.img
+	mips-linux-objcopy -g -Obinary $(OUTDIR)/boot.out $(OUTDIR)/boot.img
+	mips-linux-objdump -h -S $(OUTDIR)/boot.out > $(OUTDIR)/boot.text
 #david
-	cp ./Output/boot.img ../btcode/boot.img -f
+	cp $(OUTDIR)/boot.img ../btcode/boot.img -f
 
 #"$(OUTDIR)" :
 
 ##########################head.o must be the first.
 
-OBJFILES	= ./Output/head.o ./Output/eth_tftpd.o ./Output/irq.o ./Output/inthandler.o ./Output/setup.o ./Output/utility.o  ./Output/main.o ./Output/traps.o $(OUTDIR)/init.o $(OUTDIR)/string.o  $(OUTDIR)/strtol.o $(OUTDIR)/strtoul.o $(OUTDIR)/ctool.o $(OUTDIR)/misc.o  $(OUTDIR)/calloc.o
+OBJFILES	= $(OUTDIR)/head.o $(OUTDIR)/eth_tftpd.o $(OUTDIR)/irq.o $(OUTDIR)/inthandler.o $(OUTDIR)/setup.o $(OUTDIR)/utility.o  $(OUTDIR)/main.o $(OUTDIR)/traps.o $(OUTDIR)/init.o $(OUTDIR)/string.o  $(OUTDIR)/strtol.o $(OUTDIR)/strtoul.o $(OUTDIR)/ctool.o $(OUTDIR)/misc.o  $(OUTDIR)/calloc.o
 
 #--------------------------------------
 ifdef CONFIG_SPI_FLASH
@@ -202,33 +202,33 @@ endif
 
 #--------------------------------------
 ifeq ($(CONFIG_DHCP_SERVER),y)
-OBJFILES += ./Output/dhcpd.o
+OBJFILES += $(OUTDIR)/dhcpd.o
 endif
 #--------------------------------------
 ifeq ($(CONFIG_HTTP_SERVER),y)
-OBJFILES += ./Output/utcp.o 
+OBJFILES += $(OUTDIR)/utcp.o 
 endif
 #--------------------------------------
 
 
 ifdef RTL8196B
-OBJFILES += ./Output/ethInt_865x.o \
-./Output/swCore.o \
-./Output/swNic_poll.o \
-./Output/swTable.o \
-./Output/vlanTable.o
+OBJFILES += $(OUTDIR)/ethInt_865x.o \
+$(OUTDIR)/swCore.o \
+$(OUTDIR)/swNic_poll.o \
+$(OUTDIR)/swTable.o \
+$(OUTDIR)/vlanTable.o
 endif
 ifdef RTL8198
-OBJFILES += ./Output/ethInt_865x.o \
-./Output/swCore.o \
-./Output/swNic_poll.o \
-./Output/swTable.o \
-./Output/vlanTable.o
+OBJFILES += $(OUTDIR)/ethInt_865x.o \
+$(OUTDIR)/swCore.o \
+$(OUTDIR)/swNic_poll.o \
+$(OUTDIR)/swTable.o \
+$(OUTDIR)/vlanTable.o
 endif
 #--------------------------------------
 ifdef CONFIG_PCIE_MODULE
-OBJFILES += ./Output/test_hw.o
-OBJFILES += ./Output/test_8168n.o
+OBJFILES += $(OUTDIR)/test_hw.o
+OBJFILES += $(OUTDIR)/test_8168n.o
 endif
 #------------------------------------
 ifeq ($(CONFIG_SPE_MODULE),y)
@@ -237,7 +237,7 @@ CFLAGS += -DCONFIG_R8198EP_HOST
 else
 CFLAGS += -DCONFIG_R8198EP_DEVICE
 endif
-OBJFILES += ./Output/test_slvpcie.o
+OBJFILES += $(OUTDIR)/test_slvpcie.o
 endif
 
 ifeq ($(CONFIG_RTL8198_TAROKO),y)
@@ -499,7 +499,7 @@ clean :
 	
 	
 test:
-	OBJFILES	= ./Output/head.o 
+	OBJFILES	= $(OUTDIR)/head.o 
 $(OUTDIR)/test.out :	 $(OBJFILES) $(OUTDIR)/test.o
 	$(LD) $(LDFLAGS) $(OBJFILES) $(OUTDIR)/test.o $(LIBS) -o $(OUTDIR)/test.out	
 
