@@ -506,7 +506,8 @@ static unsigned int chksum(void *dataptr, Int16 len)
 	unsigned int acc;
 
 	for(acc = 0; len > 1; len -= 2) {
-		acc += *((Int16 *)dataptr)++;
+		acc += *((Int16 *)dataptr);
+		dataptr = (Int16 *)dataptr + 1;
 	}
 
 	/* add up any odd byte */
