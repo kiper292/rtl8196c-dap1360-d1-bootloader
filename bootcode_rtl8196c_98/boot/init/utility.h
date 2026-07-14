@@ -36,8 +36,8 @@ unsigned long kernelsp;
 
 //check
 #define HS_IMAGE_OFFSET		(24*1024)	//0x6000
-#define DS_IMAGE_OFFSET		(25*1024)	//0x6400
-#define CS_IMAGE_OFFSET		(32*1024)	//0x8000
+#define DS_IMAGE_OFFSET		(32*1024)	//0x8000
+#define CS_IMAGE_OFFSET		(48*1024)	//0xC000
 
 #define CODE_IMAGE_OFFSET		(64*1024)	//0x10000
 #define CODE_IMAGE_OFFSET2	(128*1024)	//0x20000
@@ -107,7 +107,7 @@ extern  int sc16is7x0_err;
 
 #if defined(RTL8196B) || defined(RTL8198)
 	#if defined(RTL8196C)
-		#define Get_GPIO_SW_IN() (!((REG32(PABCDDAT_REG) & (1<<5))>>5) )  //return 0 if non-press
+		#define Get_GPIO_SW_IN() (!((REG32(PABCDDAT_REG) & (1<<3))>>3) )  //return 0 if non-press
 	#elif defined(RTL8198)
 		#if defined(CONFIG_RTL89xxC)
 			#if defined(RTK_VOIP_BOARD_V100)
