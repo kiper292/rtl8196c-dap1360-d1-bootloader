@@ -39,6 +39,16 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 #CROSS_KERNEL_COMPILE = /toolchain/rsdk-1.3.5/linux/uclibc/bin/mips-linux-
 #TOOLCHAIN_PATH = `echo ${CROSS_KERNEL_COMPILE} | sed -e 's/\/mips-linux-/ /g'`
 #PATH     := $(PATH):$(TOOLCHAIN_PATH)
+RSDK_DIR = $(ROOTDIR)/toolchain
+RSDK_URL_BASE = https://github.com/kiper292/openwrt_rtk/releases/download/rsdk
+RSDK_4181_VER = rsdk-4.6.4-4181-EB-3.10-0.9.33-m32u-20141001
+RSDK_4181_ARCHIVE = $(RSDK_4181_VER).tar.xz
+RSDK_4181_URL = $(RSDK_URL_BASE)/$(RSDK_4181_ARCHIVE)
+
+RSDK_5281_VER = rsdk-4.6.4-5281-EB-3.10-0.9.33-m32ub-20141001
+RSDK_5281_ARCHIVE = $(RSDK_5281_VER).tar.xz
+RSDK_5281_URL = $(RSDK_URL_BASE)/$(RSDK_5281_ARCHIVE)
+
 MAKE = make
 
 
@@ -71,10 +81,38 @@ include $(LINUX_CONFIG)
 
 export PATH
 ifeq ($(CONFIG_RTL8196C),y)
-PATH:= $(shell pwd)/../rlxlinux-v2.2/toolchain/rsdk-1.3.6-4181-EB-2.6.30-0.9.30/bin:$(PATH)
+RSDK_BIN_4181 = $(RSDK_DIR)/$(RSDK_4181_VER)/bin
+STAGING_DIR = $(RSDK_DIR)/$(RSDK_4181_VER)
+export STAGING_DIR
+PATH:= $(shell \
+	if [ ! -d "$(RSDK_BIN_4181)" ]; then \
+		mkdir -p dl $(RSDK_DIR); \
+		if [ ! -s "dl/$(RSDK_4181_ARCHIVE)" ]; then \
+			echo "Downloading $(RSDK_4181_VER)..."; \
+			wget -q $(RSDK_4181_URL) -O dl/$(RSDK_4181_ARCHIVE); \
+		fi; \
+		echo "Extracting $(RSDK_4181_VER)..."; \
+		tar xJf dl/$(RSDK_4181_ARCHIVE) -C $(RSDK_DIR)/; \
+	fi; \
+	echo "$(RSDK_BIN_4181)" \
+):$(PATH)
 endif
 ifeq ($(CONFIG_RTL8198),y)
-PATH:= $(shell pwd)/../rlxlinux-v2.2/toolchain/rsdk-1.3.6-5281-EB-2.6.30-0.9.30/bin:$(PATH)
+RSDK_BIN_5281 = $(RSDK_DIR)/$(RSDK_5281_VER)/bin
+STAGING_DIR = $(RSDK_DIR)/$(RSDK_5281_VER)
+export STAGING_DIR
+PATH:= $(shell \
+	if [ ! -d "$(RSDK_BIN_5281)" ]; then \
+		mkdir -p dl $(RSDK_DIR); \
+		if [ ! -s "dl/$(RSDK_5281_ARCHIVE)" ]; then \
+			echo "Downloading $(RSDK_5281_VER)..."; \
+			wget -q $(RSDK_5281_URL) -O dl/$(RSDK_5281_ARCHIVE); \
+		fi; \
+		echo "Extracting $(RSDK_5281_VER)..."; \
+		tar xJf dl/$(RSDK_5281_ARCHIVE) -C $(RSDK_DIR)/; \
+	fi; \
+	echo "$(RSDK_BIN_5281)" \
+):$(PATH)
 endif
 
 export CONFIG_SPI_STD_MODE

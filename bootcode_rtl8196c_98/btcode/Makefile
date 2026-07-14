@@ -111,7 +111,7 @@ else
 	$(CROSS)ld -X -nostdlib -Tld.script start.o -o boot.elf
 endif
 	$(CROSS)objcopy -Obinary boot.elf boot
-	cp boot ../boot/Output/boot -f 			#sync 
+	cp boot ../bin/boot -f 			#sync 
 	$(CROSS)objdump -h -S   boot.elf > boot.elf.txt 
 	$(CROSS)nm boot.elf  | sort > system.map
 ifeq ($(CONFIG_NFBI),y)
@@ -135,12 +135,12 @@ bootload:	bootload.c start.S gunzip.c piggy.S
 	$(CROSS)objcopy --add-section .initrd=piggy.bin start.o	# Compress
 	$(CROSS)ld -X -nostdlib -Tld.script start.o -o boot.elf
 	$(CROSS)objcopy -Obinary boot.elf boot
-	cp boot ../boot/Output/boot -f 			#sync 
+	cp boot ../bin/boot -f 			#sync 
 	$(CROSS)objdump -h -S   boot.elf > boot.elf.txt 
 	$(CROSS)nm boot.elf  | sort > system.map
 	./cvimg boot boot boot.bin 0 0
 endif
-	cp boot.bin ../boot/Output/boot.bin -f 			#copy file to Output for easy use.
+	cp boot.bin ../bin/boot.bin -f 			#copy file to bin for easy use.
 
 clean:
 	rm -f boot boot.elf *.txt system.map piggy.bin piggy.elf piggy.o nfjrom.elf nfjrom
