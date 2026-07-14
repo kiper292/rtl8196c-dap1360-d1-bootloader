@@ -133,7 +133,7 @@ int check_system_image(unsigned long addr,IMG_HEADER_Tp pHeader,SETTING_HEADER_T
 			gCHKKEY_CNT++;
 			if( gCHKKEY_CNT>ACCCNT_TOCHKKEY)
 			{	gCHKKEY_CNT=0;
-				if ( user_interrupt(0)==1 )
+				if ( user_interrupt(0)==1 )  //return 1: got ESC Key
 				{
 					return 0;
 				}
@@ -142,6 +142,11 @@ int check_system_image(unsigned long addr,IMG_HEADER_Tp pHeader,SETTING_HEADER_T
 		}	
 		if ( sum ) {
 			ret=0;
+		}
+#else
+		if ( user_interrupt(0)==1 )  //return 1: got ESC Key
+		{
+			return 0;
 		}
 #endif
 	}
@@ -184,7 +189,7 @@ int check_rootfs_image(unsigned long addr)
 			gCHKKEY_CNT++;
 			if( gCHKKEY_CNT>ACCCNT_TOCHKKEY)
 			{	gCHKKEY_CNT=0;
-				if ( user_interrupt(0)==1 )
+				if ( user_interrupt(0)==1 )  //return 1: got ESC Key
 					return 0;
 			}
 		sum += rtl_inw(addr + i);
@@ -193,7 +198,12 @@ int check_rootfs_image(unsigned long addr)
 	if ( sum ) {
 		prom_printf("rootfs checksum error at %X!\n",addr-FLASH_BASE);
 		return 0;
-	}	
+	}
+#else
+	if ( user_interrupt(0)==1 )  //return 1: got ESC Key
+	{
+		return 0;
+	}
 #endif	
 	return 1;
 #endif //CONFIG_RTK_VOIP
@@ -575,7 +585,6 @@ int pollingDownModeKeyword(int key)
 	if  (Check_UART_DataReady() )
 	{
 		i=Get_UART_Data();
-		Get_UART_Data();
 		if( i == key )
 		{ 	
 #if defined(UTILITY_DEBUG)		
@@ -1337,6 +1346,24 @@ void initFlash(void)
 void doBooting(int flag, unsigned long addr, IMG_HEADER_Tp pheader)
 {
 #if !defined(CONFIG_NFBI)
+	// Check if interrupt was already detected during user_interrupt()
+	// (ESC key or button press consumed UART data, so we can't check again)
+	if (gCHKKEY_HIT) {
+		prom_printf("\n==========================\n");
+		prom_printf("Crash mode (user interrupt)\n");
+		prom_printf("==========================\n");
+#if defined(CONFIG_BOOT_TIME_MEASURE)
+		cp3_count_print();
+#endif
+		dprintf("\n---Escape booting by user interrupt\n");
+		REG32(GIMR_REG)=0x0;
+#if defined(CONFIG_BOOT_RESET_ENABLE)
+		Set_GPIO_LED_ON();
+#endif
+		goToDownMode();
+		return;
+	}
+
 	if(flag)
 	{
 		int press_start, press_end, press_duration;
