@@ -11,9 +11,9 @@
 	#define FW_SIGNATURE_WITH_ROOT	((char *)"cr6b")	// fw signature with root fs
 	#define ROOT_SIGNATURE          ((char *)"r6br")
 #elif defined(RTL8196B) && defined(RTL8196C)
-	#define FW_SIGNATURE			((char *)"cs6c")	// fw signature
-	#define FW_SIGNATURE_WITH_ROOT	((char *)"cr6c")	// fw signature with root fs
-	#define ROOT_SIGNATURE          ((char *)"r6cr")
+	#define FW_SIGNATURE			((char *)"cs6b")	// fw signature
+	#define FW_SIGNATURE_WITH_ROOT	((char *)"cr6b")	// fw signature with root fs
+	#define ROOT_SIGNATURE          ((char *)"r6br")
 #elif defined(RTL8198)
 	#define FW_SIGNATURE			((char *)"cs6c")	// fw signature
 	#define FW_SIGNATURE_WITH_ROOT	((char *)"cr6c")	// fw signature with root fs

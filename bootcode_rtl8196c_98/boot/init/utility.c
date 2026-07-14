@@ -5,7 +5,7 @@
 #include <rtl8196x/asicregs.h>
 
 //#define UTILITY_DEBUG 1
-#define NEED_CHKSUM 1
+//#define NEED_CHKSUM 1
 
 #ifdef CONFIG_RTL_FLASH_DUAL_IMAGE_ENABLE	
 #define BANK1_BOOT 1
@@ -107,9 +107,6 @@ int check_system_image(unsigned long addr,IMG_HEADER_Tp pHeader,SETTING_HEADER_T
 	// Read header, heck signature and checksum
 	int i, ret=0;
 	unsigned short sum=0, *word_ptr;
-	unsigned short length=0;
-	unsigned short temp16=0;
-	char image_sig_check[1]={0};
 	char image_sig[4]={0};
 	char image_sig_root[4]={0};
 	if(gCHKKEY_HIT==1)
@@ -123,41 +120,30 @@ int check_system_image(unsigned long addr,IMG_HEADER_Tp pHeader,SETTING_HEADER_T
 	memcpy(image_sig_root, FW_SIGNATURE_WITH_ROOT, SIG_LEN);
 
 	if (!memcmp(pHeader->signature, image_sig, SIG_LEN))
-		ret=1;
-	else if  (!memcmp(pHeader->signature, image_sig_root, SIG_LEN))
 		ret=2;
+	else if  (!memcmp(pHeader->signature, image_sig_root, SIG_LEN))
+		ret=1;
 	else{
 		prom_printf("no sys signature at %X!\n",addr-FLASH_BASE);
 	}		
 	//prom_printf("ret=%d  sys signature at %X!\n",ret,addr-FLASH_BASE);
 	if (ret) {
+#if defined(NEED_CHKSUM)
 		for (i=0; i<pHeader->len; i+=2) {
-#if 1  //slowly
 			gCHKKEY_CNT++;
 			if( gCHKKEY_CNT>ACCCNT_TOCHKKEY)
 			{	gCHKKEY_CNT=0;
-				if ( user_interrupt(0)==1 )  //return 1: got ESC Key
+				if ( user_interrupt(0)==1 )
 				{
-					//prom_printf("ret=%d  ------> line %d!\n",ret,__LINE__);
 					return 0;
 				}
 			}
-#else  //speed-up, only support UART, not support GPIO
-			if((Get_UART_Data()==ESC)  || (Get_GPIO_SW_IN()!=0))
-			{	gCHKKEY_HIT=1; 
-				return 0;
-			}
-#endif
-#if defined(NEED_CHKSUM)	
 			sum += rtl_inw(addr + sizeof(IMG_HEADER_T) + i);
-#endif
 		}	
-#if defined(NEED_CHKSUM)			
 		if ( sum ) {
-			//prom_printf("ret=%d  ------> line %d!\n",ret,__LINE__);
 			ret=0;
 		}
-#endif		
+#endif
 	}
 	//prom_printf("ret=%d  sys signature at %X!\n",ret,addr-FLASH_BASE);
 
@@ -193,26 +179,17 @@ int check_rootfs_image(unsigned long addr)
 
 	length = *(((unsigned long *)tmpbuf) + OFFSET_OF_LEN) + SIZE_OF_SQFS_SUPER_BLOCK + SIZE_OF_CHECKSUM;
 
+#if defined(NEED_CHKSUM)
 	for (i=0; i<length; i+=2) {
-#if 1  //slowly
 			gCHKKEY_CNT++;
 			if( gCHKKEY_CNT>ACCCNT_TOCHKKEY)
 			{	gCHKKEY_CNT=0;
-				if ( user_interrupt(0)==1 )  //return 1: got ESC Key
+				if ( user_interrupt(0)==1 )
 					return 0;
 			}
-#else  //speed-up, only support UART, not support GPIO.
-			if((Get_UART_Data()==ESC)  || (Get_GPIO_SW_IN()!=0))
-			{	gCHKKEY_HIT=1; 
-				return 0;
-			}
-#endif			
-#if defined(NEED_CHKSUM)	
 		sum += rtl_inw(addr + i);
-#endif
 	}
 
-#if defined(NEED_CHKSUM)		
 	if ( sum ) {
 		prom_printf("rootfs checksum error at %X!\n",addr-FLASH_BASE);
 		return 0;
@@ -239,6 +216,7 @@ static int check_image_header(IMG_HEADER_Tp pHeader,SETTING_HEADER_Tp psetting_h
 
 #ifdef CONFIG_RTL_FLASH_MAPPING_ENABLE	
 	i=CONFIG_LINUX_IMAGE_OFFSET_START;	
+	prom_printf("Scanning flash 0x%x-0x%x step 0x%x...\n", i, CONFIG_LINUX_IMAGE_OFFSET_END, CONFIG_LINUX_IMAGE_OFFSET_STEP);
 	while(i<=CONFIG_LINUX_IMAGE_OFFSET_END && (0==ret))
 	{
 		return_addr=(unsigned long)FLASH_BASE+i+bank_offset; 
@@ -246,13 +224,16 @@ static int check_image_header(IMG_HEADER_Tp pHeader,SETTING_HEADER_Tp psetting_h
 			i += CONFIG_LINUX_IMAGE_OFFSET_STEP; 
 			continue;
 		}
+		prom_printf("  offset 0x%x...", i);
 		ret = check_system_image((unsigned long)FLASH_BASE+i+bank_offset, pHeader, psetting_header);
+		prom_printf(" ret=%d\n", ret);
 		i += CONFIG_LINUX_IMAGE_OFFSET_STEP; 
 	}
 #endif
 
 	if(ret==2)
         {
+		prom_printf("System image found (ret=2), searching rootfs...\n");
                 ret=check_rootfs_image((unsigned long)FLASH_BASE+ROOT_FS_OFFSET+bank_offset);
                 if(ret==0)
                 	ret=check_rootfs_image((unsigned long)FLASH_BASE+ROOT_FS_OFFSET+ROOT_FS_OFFSET_OP1+bank_offset);
@@ -299,9 +280,9 @@ int check_system_image_1(unsigned long addr,IMG_HEADER_Tp pHeader,SETTING_HEADER
 	memcpy(image_sig_root, FW_SIGNATURE_WITH_ROOT, SIG_LEN);
 
 	if (!memcmp(pHeader->signature, image_sig, SIG_LEN))
-		ret=1;
-	else if  (!memcmp(pHeader->signature, image_sig_root, SIG_LEN))
 		ret=2;
+	else if  (!memcmp(pHeader->signature, image_sig_root, SIG_LEN))
+		ret=1;
 	else{
 		//prom_printf("no sys signature at %X!\n",addr-FLASH_BASE);
 	}		
@@ -618,8 +599,8 @@ int pollingPressedButton(int pressedFlag)
 #ifndef CONFIG_USING_JTAG
 			REG32(RTL_GPIO_MUX) =  REG32(RTL_GPIO_MUX)|0x00300000;
 #endif			
-			REG32(PABCDCNR_REG) = REG32(PABCDCNR_REG)& (~(1<<5) ); //set byte F GPIO7 = gpio
-             		REG32(PABCDDIR_REG) = REG32(PABCDDIR_REG) & (~(1<<5) );  //0 input, 1 out
+			REG32(PABCDCNR_REG) = REG32(PABCDCNR_REG)& (~(1<<3) ); //set pin B3 = gpio
+			REG32(PABCDDIR_REG) = REG32(PABCDDIR_REG) & (~(1<<3) );  //0 input, 1 out
 #endif
 #if defined(RTL8198)
 	// vincent: already done in Init_GPIO(). do nothing here
@@ -630,6 +611,7 @@ int pollingPressedButton(int pressedFlag)
 		
 			if ( Get_GPIO_SW_IN() )			
 			{// button pressed
+				prom_printf("Reset Button Pressed (PABCDDAT=%x PEFGHDAT=%x)\n", REG32(PABCDDAT_REG), REG32(PEFGHDAT_REG));
 #if defined(UTILITY_DEBUG)			
 	    			dprintf("User Press GPIO Break Key\r\n");
 #endif	    			
@@ -677,6 +659,7 @@ int user_interrupt(unsigned long time)
 	
 #ifdef CONFIG_BOOT_RESET_ENABLE
 	int button_press_detected=-1;
+	prom_printf("Waiting for reset button...\n");
 #endif
 	
 	tickStart=get_timer_jiffies();
@@ -705,6 +688,7 @@ int user_interrupt(unsigned long time)
 		gCHKKEY_HIT=1;    
 		return 1;
 	}
+	prom_printf("No button press (PABCDDAT=%x PEFGHDAT=%x), booting normally\n", REG32(PABCDDAT_REG), REG32(PEFGHDAT_REG));
 #endif	
 	return 0;
 }
@@ -931,8 +915,8 @@ void Init_GPIO()
 	REG32(PABCDCNR_REG) = REG32(PABCDCNR_REG)& (~(1<<1) ); //set byte A GPIO1 = gpio
 	REG32(PABCDDIR_REG) = REG32(PABCDDIR_REG) & (~(1<<1) );  //0 input, 1 output, set F bit 1 input
 	#endif
-	REG32(PABCDCNR_REG) = REG32(PABCDCNR_REG)& (~(1<<5) ); //set byte F GPIO7 = gpio
-	REG32(PABCDDIR_REG) = REG32(PABCDDIR_REG) & (~(1<<5) );  //0 input, 1 output, set F bit 7 input
+	REG32(PABCDCNR_REG) = REG32(PABCDCNR_REG)& (~(1<<3) ); //set pin B3 = gpio
+	REG32(PABCDDIR_REG) = REG32(PABCDDIR_REG) & (~(1<<3) );  //0 input, 1 out
 	//modify for light reset led pin in output mode
 	REG32(PABCDCNR_REG) = REG32(PABCDCNR_REG)& (~(1<<RESET_LED_PIN) ); 
 	REG32(PABCDDIR_REG) = REG32(PABCDDIR_REG) | ((1<<RESET_LED_PIN) ); 
@@ -1355,34 +1339,62 @@ void doBooting(int flag, unsigned long addr, IMG_HEADER_Tp pheader)
 #if !defined(CONFIG_NFBI)
 	if(flag)
 	{
+		int press_start, press_end, press_duration;
 
-		switch(user_interrupt(WAIT_TIME_USER_INTERRUPT))
-		{
-		case LOCALSTART_MODE:
-		default:
-			goToLocalStartMode(addr,pheader);			
-		#if defined(CONFIG_RTL8196BU_UART_DISABLE_TO_GPIO)
-		case DEBUG_LOCALSTART_MODE:
-			debugGoToLocalStartMode(addr,pheader);	
-		#endif
-		case DOWN_MODE:
+		// Check if button is pressed at startup
+		if (Get_GPIO_SW_IN()) {
+			prom_printf("Reset Button Pressed");
+			press_start = get_timer_jiffies();
+			
+			// Wait for button release or timeout (10 seconds)
+			while (Get_GPIO_SW_IN()) {
+				press_end = get_timer_jiffies();
+				press_duration = press_end - press_start;
+				if (press_duration >= 800) { // >= 8 seconds
+					prom_printf("\n");
+					prom_printf("==========================\n");
+					prom_printf("Crash mode\n");
+					prom_printf("==========================\n");
 #if defined(CONFIG_BOOT_TIME_MEASURE)
-			cp3_count_print();
+					cp3_count_print();
 #endif
-			dprintf("\n---Escape booting by user\n");	
-			//cli();
-		REG32(GIMR_REG)=0x0;   //add by jiawenjian
+					dprintf("\n---Escape booting by user\n");
+					REG32(GIMR_REG)=0x0;
 #if defined(CONFIG_BOOT_RESET_ENABLE)
-			Set_GPIO_LED_ON();
+					Set_GPIO_LED_ON();
 #endif
-			goToDownMode();	
-			break;
-		}/*switch case */
-	}/*if image correct*/
+					goToDownMode();
+					return;
+				}
+			}
+			// Button released
+			press_end = get_timer_jiffies();
+			press_duration = press_end - press_start;
+			prom_printf("\n");
+
+			if (press_duration >= 400) { // >= 4 seconds
+				prom_printf("==========================\n");
+				prom_printf("Reset Config to Default...\n");
+				prom_printf("==========================\n");
+				// Erase DS (Default Settings) and CS (Current Settings) sectors
+				spi_pio_init();
+				spi_sector_erase(0, DS_IMAGE_OFFSET);
+				spi_sector_erase(0, CS_IMAGE_OFFSET);
+			}
+			// Continue boot (both < 3s and 3-10s cases)
+			prom_printf("Jump to image start=0x%x...\n", pheader->startAddr);
+			goToLocalStartMode(addr, pheader);
+			return;
+		}
+		
+		// No button pressed - normal boot
+		goToLocalStartMode(addr, pheader);
+		return;
+	}
 	else
 #endif //CONFIG_NFBI
 	{
-		REG32(GIMR_REG)=0x0;   //add by jiawenjian
+		REG32(GIMR_REG)=0x0;
 		goToDownMode();		
 	}
 	return;
