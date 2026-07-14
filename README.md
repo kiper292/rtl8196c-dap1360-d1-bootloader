@@ -54,6 +54,14 @@ docker exec builder sh -c "cd /build/bootcode_rtl8196c_98 && make clean && make"
 
 Upload `bin/boot.bin` through the bootloader's web interface at the router's IP address.
 
+### Emergency Web Server
+
+When the router enters crash/download mode (hold reset ≥ 8 sec), the emergency web server is available at:
+
+**http://192.168.1.6/**
+
+Upload `bin/boot.bin` to restore the bootloader.
+
 ### Via SPI Programmer (CH341A)
 
 1. Connect CH341A to the SPI flash chip (Winbond W25Q32)
