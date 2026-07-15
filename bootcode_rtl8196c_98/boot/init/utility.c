@@ -109,12 +109,13 @@ int check_system_image(unsigned long addr,IMG_HEADER_Tp pHeader,SETTING_HEADER_T
 	unsigned short sum=0, *word_ptr;
 	char image_sig[4]={0};
 	char image_sig_root[4]={0};
+	DEBUG_LOG(("[DBG] check_system_image: enter addr=%x gCHKKEY_HIT=%d\n", addr, gCHKKEY_HIT));
 	if(gCHKKEY_HIT==1)
 		return 0;
         /*check firmware image.*/
 	word_ptr = (unsigned short *)pHeader;
 	for (i=0; i<sizeof(IMG_HEADER_T); i+=2, word_ptr++)
-		*word_ptr = rtl_inw(addr + i);	
+		*word_ptr = rtl_inw(addr + i);
 
 	memcpy(image_sig, FW_SIGNATURE, SIG_LEN);
 	memcpy(image_sig_root, FW_SIGNATURE_WITH_ROOT, SIG_LEN);
@@ -125,7 +126,8 @@ int check_system_image(unsigned long addr,IMG_HEADER_Tp pHeader,SETTING_HEADER_T
 		ret=1;
 	else{
 		prom_printf("no sys signature at %X!\n",addr-FLASH_BASE);
-	}		
+	}
+	DEBUG_LOG(("[DBG] check_system_image: sig check done ret=%d\n", ret));
 	//prom_printf("ret=%d  sys signature at %X!\n",ret,addr-FLASH_BASE);
 	if (ret) {
 #if defined(NEED_CHKSUM)
@@ -139,19 +141,23 @@ int check_system_image(unsigned long addr,IMG_HEADER_Tp pHeader,SETTING_HEADER_T
 				}
 			}
 			sum += rtl_inw(addr + sizeof(IMG_HEADER_T) + i);
-		}	
+		}
 		if ( sum ) {
 			ret=0;
 		}
 #else
+		DEBUG_LOG(("[DBG] check_system_image: calling user_interrupt\n"));
 		if ( user_interrupt(0)==1 )  //return 1: got ESC Key
 		{
+			DEBUG_LOG(("[DBG] check_system_image: user_interrupt returned 1, returning 0\n"));
 			return 0;
 		}
+		DEBUG_LOG(("[DBG] check_system_image: user_interrupt returned 0\n"));
 #endif
 	}
 	//prom_printf("ret=%d  sys signature at %X!\n",ret,addr-FLASH_BASE);
 
+	DEBUG_LOG(("[DBG] check_system_image: returning ret=%d\n", ret));
 	return (ret);
 }
 
@@ -172,7 +178,8 @@ int check_rootfs_image(unsigned long addr)
 	
 	if(gCHKKEY_HIT==1)
 		return 0;
-	
+
+	DEBUG_LOG(("[DBG] check_rootfs_image: enter addr=%x\n", addr));
 	word_ptr = (unsigned short *)tmpbuf;
 	for (i=0; i<16; i+=2, word_ptr++)
 		*word_ptr = rtl_inw(addr + i);
@@ -183,6 +190,7 @@ int check_rootfs_image(unsigned long addr)
 	}
 
 	length = *(((unsigned long *)tmpbuf) + OFFSET_OF_LEN) + SIZE_OF_SQFS_SUPER_BLOCK + SIZE_OF_CHECKSUM;
+	DEBUG_LOG(("[DBG] check_rootfs_image: rootfs len=0x%08x, calling user_interrupt\n", length));
 
 #if defined(NEED_CHKSUM)
 	for (i=0; i<length; i+=2) {
@@ -190,7 +198,10 @@ int check_rootfs_image(unsigned long addr)
 			if( gCHKKEY_CNT>ACCCNT_TOCHKKEY)
 			{	gCHKKEY_CNT=0;
 				if ( user_interrupt(0)==1 )  //return 1: got ESC Key
+				{
+					DEBUG_LOG(("[DBG] check_rootfs_image: ESC during checksum, returning 0\n"));
 					return 0;
+				}
 			}
 		sum += rtl_inw(addr + i);
 	}
@@ -200,55 +211,74 @@ int check_rootfs_image(unsigned long addr)
 		return 0;
 	}
 #else
+	DEBUG_LOG(("[DBG] check_rootfs_image: calling user_interrupt\n"));
 	if ( user_interrupt(0)==1 )  //return 1: got ESC Key
 	{
+		DEBUG_LOG(("[DBG] check_rootfs_image: user_interrupt returned 1, returning 0\n"));
 		return 0;
 	}
-#endif	
+	DEBUG_LOG(("[DBG] check_rootfs_image: user_interrupt returned 0, returning 1\n"));
+#endif
 	return 1;
 #endif //CONFIG_RTK_VOIP
 }
 static int check_image_header(IMG_HEADER_Tp pHeader,SETTING_HEADER_Tp psetting_header,unsigned long bank_offset)
 {
 	int i,ret=0;
+	DEBUG_LOG(("[DBG] check_image_header: enter bank_offset=0x%08x\n", bank_offset));
 	//flash mapping
 	return_addr = (unsigned long)FLASH_BASE+CODE_IMAGE_OFFSET+bank_offset;
 	ret = check_system_image((unsigned long)FLASH_BASE+CODE_IMAGE_OFFSET+bank_offset,pHeader, psetting_header);
+	DEBUG_LOG(("[DBG] check_image_header: after CODE_IMAGE_OFFSET ret=%d\n", ret));
 
 	if(ret==0) {
-		return_addr = (unsigned long)FLASH_BASE+CODE_IMAGE_OFFSET2+bank_offset;		
+		return_addr = (unsigned long)FLASH_BASE+CODE_IMAGE_OFFSET2+bank_offset;
 		ret=check_system_image((unsigned long)FLASH_BASE+CODE_IMAGE_OFFSET2+bank_offset,  pHeader, psetting_header);
+		DEBUG_LOG(("[DBG] check_image_header: after CODE_IMAGE_OFFSET2 ret=%d\n", ret));
 	}
 	if(ret==0) {
-		return_addr = (unsigned long)FLASH_BASE+CODE_IMAGE_OFFSET3+bank_offset;				
+		return_addr = (unsigned long)FLASH_BASE+CODE_IMAGE_OFFSET3+bank_offset;
 		ret=check_system_image((unsigned long)FLASH_BASE+CODE_IMAGE_OFFSET3+bank_offset,  pHeader, psetting_header);
-	}			
+		DEBUG_LOG(("[DBG] check_image_header: after CODE_IMAGE_OFFSET3 ret=%d\n", ret));
+	}
 
-#ifdef CONFIG_RTL_FLASH_MAPPING_ENABLE	
-	i=CONFIG_LINUX_IMAGE_OFFSET_START;	
+#ifdef CONFIG_RTL_FLASH_MAPPING_ENABLE
+	i=CONFIG_LINUX_IMAGE_OFFSET_START;
 	prom_printf("Scanning flash 0x%x-0x%x step 0x%x...\n", i, CONFIG_LINUX_IMAGE_OFFSET_END, CONFIG_LINUX_IMAGE_OFFSET_STEP);
 	while(i<=CONFIG_LINUX_IMAGE_OFFSET_END && (0==ret))
 	{
-		return_addr=(unsigned long)FLASH_BASE+i+bank_offset; 
+		return_addr=(unsigned long)FLASH_BASE+i+bank_offset;
 		if(CODE_IMAGE_OFFSET == i || CODE_IMAGE_OFFSET2 == i || CODE_IMAGE_OFFSET3 == i){
-			i += CONFIG_LINUX_IMAGE_OFFSET_STEP; 
+			i += CONFIG_LINUX_IMAGE_OFFSET_STEP;
 			continue;
 		}
 		prom_printf("  offset 0x%x...", i);
 		ret = check_system_image((unsigned long)FLASH_BASE+i+bank_offset, pHeader, psetting_header);
+		DEBUG_LOG(("[DBG] scan loop: check_system_image returned ret=%d, i=0x%x, gCHKKEY_HIT=%d\n", ret, i, gCHKKEY_HIT));
 		prom_printf(" ret=%d\n", ret);
-		i += CONFIG_LINUX_IMAGE_OFFSET_STEP; 
+		i += CONFIG_LINUX_IMAGE_OFFSET_STEP;
 	}
+	DEBUG_LOG(("[DBG] check_image_header: scan loop done, ret=%d\n", ret));
 #endif
 
 	if(ret==2)
         {
 		prom_printf("System image found (ret=2), searching rootfs...\n");
+		DEBUG_LOG(("[DBG] check_image_header: calling check_rootfs_image #1\n"));
                 ret=check_rootfs_image((unsigned long)FLASH_BASE+ROOT_FS_OFFSET+bank_offset);
+		DEBUG_LOG(("[DBG] check_image_header: check_rootfs_image #1 returned %d\n", ret));
                 if(ret==0)
+                {
+			DEBUG_LOG(("[DBG] check_image_header: calling check_rootfs_image #2\n"));
                 	ret=check_rootfs_image((unsigned long)FLASH_BASE+ROOT_FS_OFFSET+ROOT_FS_OFFSET_OP1+bank_offset);
+			DEBUG_LOG(("[DBG] check_image_header: check_rootfs_image #2 returned %d\n", ret));
+                }
                 if(ret==0)
+                {
+			DEBUG_LOG(("[DBG] check_image_header: calling check_rootfs_image #3\n"));
                 	ret=check_rootfs_image((unsigned long)FLASH_BASE+ROOT_FS_OFFSET+ROOT_FS_OFFSET_OP1+ROOT_FS_OFFSET_OP2+bank_offset);
+			DEBUG_LOG(("[DBG] check_image_header: check_rootfs_image #3 returned %d\n", ret));
+                }
 
 #ifdef CONFIG_RTL_FLASH_MAPPING_ENABLE
 		i = CONFIG_ROOT_IMAGE_OFFSET_START;
@@ -265,6 +295,7 @@ static int check_image_header(IMG_HEADER_Tp pHeader,SETTING_HEADER_Tp psetting_h
 		}
 #endif
 	}
+	DEBUG_LOG(("[DBG] check_image_header: returning ret=%d\n", ret));
 	return ret;
 }
 
@@ -545,15 +576,18 @@ int check_dualbank_setting(int in_mode)
 		return (ret1 || ret2);
 	
 	ret = check_image_header(pHeader, psetting_header, bank_offset);
+	DEBUG_LOG(("[DBG] check_dualbank: check_image_header bank_offset=0x%08x returned %d\n", bank_offset, ret));
 
 	if(0 == ret) {
+		DEBUG_LOG(("[DBG] check_dualbank: bank_offset=0x%08x failed, trying back_bank_offset=0x%08x\n", bank_offset, back_bank_offset));
 		ret = check_image_header(pHeader, psetting_header, back_bank_offset);
+		DEBUG_LOG(("[DBG] check_dualbank: check_image_header back_bank_offset=0x%08x returned %d\n", back_bank_offset, ret));
 		if(0 != ret) {
 			boot_bank = back_bank;
 			bank_mark = back_bank_mark;
 		}
 	}
-	
+	DEBUG_LOG(("[DBG] check_dualbank: returning ret=%d\n", ret));
 	return ret;
 }
 #endif
@@ -564,16 +598,20 @@ int check_dualbank_setting(int in_mode)
 int check_image(IMG_HEADER_Tp pHeader,SETTING_HEADER_Tp psetting_header)
 {
 	int ret=0;
+	DEBUG_LOG(("[DBG] check_image: enter\n"));
 #ifdef CONFIG_NFBI
 	prom_printf("---NFBI---\n");
 #else
  	//only one bank
- #ifndef CONFIG_RTL_FLASH_DUAL_IMAGE_ENABLE	
- 	ret=check_image_header(pHeader,psetting_header,0); 
+ #ifndef CONFIG_RTL_FLASH_DUAL_IMAGE_ENABLE
+ 	ret=check_image_header(pHeader,psetting_header,0);
+	DEBUG_LOG(("[DBG] check_image: check_image_header returned %d\n", ret));
  #else
        ret = check_dualbank_setting(IN_BOOTING_MODE);
+	DEBUG_LOG(("[DBG] check_image: check_dualbank_setting returned %d\n", ret));
 #endif
 #endif //end of NFBI else
+	DEBUG_LOG(("[DBG] check_image: returning ret=%d\n", ret));
 	return ret;
 }
 
@@ -586,19 +624,22 @@ int pollingDownModeKeyword(int key)
 	{
 		i=Get_UART_Data();
 		if( i == key )
-		{ 	
-#if defined(UTILITY_DEBUG)		
+		{
+#if defined(UTILITY_DEBUG)
 			dprintf("User Press ESC Break Key\r\n");
-#endif			
+#endif
 			gCHKKEY_HIT=1;
+			DEBUG_LOG(("[DBG] pollingDownModeKeyword: ESC hit, i=0x%x\n", i));
 			return 1;
 		}
+		DEBUG_LOG(("[DBG] pollingDownModeKeyword: got 0x%x, not ESC\n", i));
 	}
 	return 0;
 }
 #ifdef CONFIG_BOOT_RESET_ENABLE
 int pollingPressedButton(int pressedFlag)
 {
+	//DEBUG_LOG(("[DBG] pollingPressedButton: enter pressedFlag=%d\n", pressedFlag));
 #ifndef CONFIG_NFBI
 #ifndef CONFIG_FPGA_PLATFORM
 		// polling if button is pressed --------------------------------------
@@ -620,7 +661,7 @@ int pollingPressedButton(int pressedFlag)
 		
 			if ( Get_GPIO_SW_IN() )			
 			{// button pressed
-				prom_printf("Reset Button Pressed (PABCDDAT=%x PEFGHDAT=%x)\n", REG32(PABCDDAT_REG), REG32(PEFGHDAT_REG));
+				prom_printf("Reset Button Pressed\n");
 #if defined(UTILITY_DEBUG)			
 	    			dprintf("User Press GPIO Break Key\r\n");
 #endif	    			
@@ -672,10 +713,15 @@ int user_interrupt(unsigned long time)
 #endif
 	
 	tickStart=get_timer_jiffies();
-	
+
+	DEBUG_LOG(("[DBG] user_interrupt: time=%lu\n", time));
 	do {
 		ret=pollingDownModeKeyword(ESC);
-		if(ret == 1) return 1;
+		if(ret == 1) {
+			DEBUG_LOG(("[DBG] user_interrupt: ESC detected, gCHKKEY_HIT=%d\n", gCHKKEY_HIT));
+			DEBUG_LOG(("[DBG] user_interrupt: about to return 1\n"));
+			return 1;
+		}
 #ifdef CONFIG_BOOT_RESET_ENABLE		
 		ret=pollingPressedButton(button_press_detected);
 		button_press_detected=ret;
@@ -688,6 +734,7 @@ int user_interrupt(unsigned long time)
 	0
 #endif
 	);  // 1 sec
+	DEBUG_LOG(("[DBG] user_interrupt: do-while exited\n"));
 #if defined(UTILITY_DEBUG)
 	dprintf("timeout\r\n");
 #endif	
@@ -697,8 +744,9 @@ int user_interrupt(unsigned long time)
 		gCHKKEY_HIT=1;    
 		return 1;
 	}
-	prom_printf("No button press (PABCDDAT=%x PEFGHDAT=%x), booting normally\n", REG32(PABCDDAT_REG), REG32(PEFGHDAT_REG));
-#endif	
+	prom_printf("No button press, booting normally\n");
+	DEBUG_LOG(("[DBG] user_interrupt: timeout, returning 0\n"));
+#endif
 	return 0;
 }
 //------------------------------------------------------------------------------------------
@@ -1112,16 +1160,19 @@ void console_init(unsigned long lexea_clock)
 //-------------------------------------------------------
 void goToDownMode()
 {
+	prom_printf("[DBG] goToDownMode: entered\n");
 #ifndef CONFIG_FPGA_PLATFORM
 #ifndef CONFIG_RTL8198
-		REG32(PIN_MUX_SEL)=REG32(PIN_MUX_SEL)&(0xFFFFFFFF-0x00300000);	
+		REG32(PIN_MUX_SEL)=REG32(PIN_MUX_SEL)&(0xFFFFFFFF-0x00300000);
 #else
-	REG32(PIN_MUX_SEL)=(0x0c0f);  
-#endif	
+	REG32(PIN_MUX_SEL)=(0x0c0f);
+#endif
 #endif
 
 #ifndef CONFIG_FPGA_PLATFORM
-		eth_startup(0);	
+	prom_printf("[DBG] goToDownMode: calling eth_startup\n");
+	eth_startup(0);
+	prom_printf("[DBG] goToDownMode: eth_startup returned\n");
 #endif
 
 #if defined (SW_8366GIGA)
@@ -1134,7 +1185,9 @@ void goToDownMode()
 		cp3_count_print();
 #endif		
 		dprintf("\n---Ethernet init Okay!\n");
+		prom_printf("[DBG] goToDownMode: calling sti\n");
 		sti();
+		prom_printf("[DBG] goToDownMode: calling tftpd_entry\n");
 		tftpd_entry();
 #ifdef DHCP_SERVER			
 		dhcps_entry();
@@ -1171,17 +1224,21 @@ void goToLocalStartMode(unsigned long addr,IMG_HEADER_Tp pheader)
 	unsigned short *word_ptr;
 	void	(*jump)(void);
 	int i;
-	
+
+	DEBUG_LOG(("[DBG] goToLocalStartMode: enter addr=%x\n", addr));
 	//prom_printf("\n---%X\n",return_addr);
 	word_ptr = (unsigned short *)pheader;
 	for (i=0; i<sizeof(IMG_HEADER_T); i+=2, word_ptr++)
 	*word_ptr = rtl_inw(addr + i);
-			
+
 	// move image to SDRAM
+	DEBUG_LOG(("[DBG] goToLocalStartMode: flashread start\n"));
 	flashread( pheader->startAddr,	(unsigned int)(addr-FLASH_BASE+sizeof(IMG_HEADER_T)), 	pheader->len-2);
-		
+	DEBUG_LOG(("[DBG] goToLocalStartMode: flashread done, calling user_interrupt\n"));
+
 	if ( !user_interrupt(0) )  // See if user escape during copy image
 	{
+		DEBUG_LOG(("[DBG] goToLocalStartMode: no ESC, jumping to image\n"));
 		outl(0,GIMR0); // mask all interrupt
 #if defined(CONFIG_BOOT_RESET_ENABLE)
 		Set_GPIO_LED_OFF();
@@ -1193,17 +1250,20 @@ void goToLocalStartMode(unsigned long addr,IMG_HEADER_Tp pheader)
 		cp3_count_print();
 #endif
 		prom_printf("Jump to image start=0x%x...\n", pheader->startAddr);
-		
+
 #ifdef CONFIG_RTL_FLASH_DUAL_IMAGE_ENABLE
 		set_bankinfo_register();
 #endif
 		jump = (void *)(pheader->startAddr);
 
 		cli();
-		flush_cache(); 
+		flush_cache();
 		jump();				 // jump to start
 		return ;
 	}
+	DEBUG_LOG(("[DBG] goToLocalStartMode: ESC detected during copy, entering download mode\n"));
+	REG32(GIMR_REG)=0x0;
+	goToDownMode();
 	return;
 }
 void debugGoToLocalStartMode(unsigned long addr,IMG_HEADER_Tp pheader)
@@ -1346,12 +1406,14 @@ void initFlash(void)
 void doBooting(int flag, unsigned long addr, IMG_HEADER_Tp pheader)
 {
 #if !defined(CONFIG_NFBI)
+	DEBUG_LOG(("[DBG] doBooting: flag=%d, gCHKKEY_HIT=%d, return_addr=0x%08x\n", flag, gCHKKEY_HIT, return_addr));
 	// Check if interrupt was already detected during user_interrupt()
 	// (ESC key or button press consumed UART data, so we can't check again)
 	if (gCHKKEY_HIT) {
 		prom_printf("\n==========================\n");
 		prom_printf("Crash mode (user interrupt)\n");
 		prom_printf("==========================\n");
+		DEBUG_LOG(("[DBG] doBooting: entering crash mode, calling goToDownMode\n"));
 #if defined(CONFIG_BOOT_TIME_MEASURE)
 		cp3_count_print();
 #endif
@@ -1421,8 +1483,9 @@ void doBooting(int flag, unsigned long addr, IMG_HEADER_Tp pheader)
 	else
 #endif //CONFIG_NFBI
 	{
+		DEBUG_LOG(("[DBG] doBooting: flag=0, calling goToDownMode\n"));
 		REG32(GIMR_REG)=0x0;
-		goToDownMode();		
+		goToDownMode();
 	}
 	return;
 }

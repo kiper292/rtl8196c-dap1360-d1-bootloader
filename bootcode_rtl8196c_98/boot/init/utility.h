@@ -8,6 +8,14 @@
 #endif
 #include "etherboot.h"
 
+//#define ENABLE_DEBUG_LOG 1
+
+#if defined(ENABLE_DEBUG_LOG)
+#define DEBUG_LOG(x) prom_printf x
+#else
+#define DEBUG_LOG(x)
+#endif
+
 
 /* Setting image header */
 typedef struct _setting_header_ {

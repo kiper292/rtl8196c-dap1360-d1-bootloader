@@ -32,6 +32,7 @@ void start_kernel(void)
 	IMG_HEADER_T header;
 	SETTING_HEADER_T setting_header;
 //-------------------------------------------------------
+	DEBUG_LOG(("[DBG] start_kernel: entered\n"));
 	setClkInitConsole();
 
 	initHeap();
@@ -51,13 +52,17 @@ void start_kernel(void)
 	showBoardInfo();
 
 	return_addr=0;
+	DEBUG_LOG(("[DBG] main: calling check_image\n"));
 	ret=check_image	(&header,&setting_header);
+	DEBUG_LOG(("[DBG] main: check_image returned %d\n", ret));
 
 #if defined(CONFIG_POST_ENABLE)
 	int post_test_result=1;
 	if(POSTRW_API()==0) ret=0;
-#endif	
+#endif
+	DEBUG_LOG(("[DBG] main: calling doBooting, ret=%d, return_addr=0x%08x\n", ret, return_addr));
 	doBooting(ret, return_addr, &header);
+	DEBUG_LOG(("[DBG] main: doBooting returned\n"));
 }
 
 //-------------------------------------------------------
