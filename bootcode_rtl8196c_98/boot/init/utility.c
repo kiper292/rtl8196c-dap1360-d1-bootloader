@@ -120,14 +120,23 @@ int check_system_image(unsigned long addr,IMG_HEADER_Tp pHeader,SETTING_HEADER_T
 	memcpy(image_sig, FW_SIGNATURE, SIG_LEN);
 	memcpy(image_sig_root, FW_SIGNATURE_WITH_ROOT, SIG_LEN);
 
-	if (!memcmp(pHeader->signature, image_sig, SIG_LEN))
+	if (!memcmp(pHeader->signature, image_sig, SIG_LEN)) {
 		ret=2;
-	else if  (!memcmp(pHeader->signature, image_sig_root, SIG_LEN))
+		DEBUG_LOG(("[DBG] Found cs6b signature at 0x%x (kernel only)\n", addr-FLASH_BASE));
+	} else if  (!memcmp(pHeader->signature, image_sig_root, SIG_LEN)) {
 		ret=1;
-	else{
+		DEBUG_LOG(("[DBG] Found cr6b signature at 0x%x (kernel+rootfs)\n", addr-FLASH_BASE));
+	} else{
 		prom_printf("no sys signature at %X!\n",addr-FLASH_BASE);
 	}
 	DEBUG_LOG(("[DBG] check_system_image: sig check done ret=%d\n", ret));
+
+	DEBUG_LOG(("[DBG] Header details:\n"));
+	DEBUG_LOG(("[DBG]   signature: %c%c%c%c\n",
+		pHeader->signature[0], pHeader->signature[1],
+		pHeader->signature[2], pHeader->signature[3]));
+	DEBUG_LOG(("[DBG]   startAddr: 0x%x\n", pHeader->startAddr));
+	DEBUG_LOG(("[DBG]   len: 0x%x (%d bytes)\n", pHeader->len, pHeader->len));
 	//prom_printf("ret=%d  sys signature at %X!\n",ret,addr-FLASH_BASE);
 	if (ret) {
 #if defined(NEED_CHKSUM)
@@ -226,6 +235,13 @@ static int check_image_header(IMG_HEADER_Tp pHeader,SETTING_HEADER_Tp psetting_h
 {
 	int i,ret=0;
 	DEBUG_LOG(("[DBG] check_image_header: enter bank_offset=0x%08x\n", bank_offset));
+
+	DEBUG_LOG(("[DBG] Flash layout:\n"));
+	DEBUG_LOG(("[DBG]   FLASH_BASE: 0x%x\n", FLASH_BASE));
+	DEBUG_LOG(("[DBG]   CODE_IMAGE_OFFSET: 0x%x (64KB)\n", CODE_IMAGE_OFFSET));
+	DEBUG_LOG(("[DBG]   CODE_IMAGE_OFFSET2: 0x%x (128KB)\n", CODE_IMAGE_OFFSET2));
+	DEBUG_LOG(("[DBG]   CODE_IMAGE_OFFSET3: 0x%x (192KB)\n", CODE_IMAGE_OFFSET3));
+	DEBUG_LOG(("[DBG]   IMG_HEADER_T size: %d bytes\n", sizeof(IMG_HEADER_T)));
 	//flash mapping
 	return_addr = (unsigned long)FLASH_BASE+CODE_IMAGE_OFFSET+bank_offset;
 	ret = check_system_image((unsigned long)FLASH_BASE+CODE_IMAGE_OFFSET+bank_offset,pHeader, psetting_header);
@@ -256,6 +272,12 @@ static int check_image_header(IMG_HEADER_Tp pHeader,SETTING_HEADER_Tp psetting_h
 		ret = check_system_image((unsigned long)FLASH_BASE+i+bank_offset, pHeader, psetting_header);
 		DEBUG_LOG(("[DBG] scan loop: check_system_image returned ret=%d, i=0x%x, gCHKKEY_HIT=%d\n", ret, i, gCHKKEY_HIT));
 		prom_printf(" ret=%d\n", ret);
+		
+		if(gCHKKEY_HIT==1) {
+			DEBUG_LOG(("[DBG] user_interrupt: ESC detected, gCHKKEY_HIT=%d\n", gCHKKEY_HIT));
+			return 0;
+		}
+		
 		i += CONFIG_LINUX_IMAGE_OFFSET_STEP;
 	}
 	DEBUG_LOG(("[DBG] check_image_header: scan loop done, ret=%d\n", ret));
@@ -1160,7 +1182,7 @@ void console_init(unsigned long lexea_clock)
 //-------------------------------------------------------
 void goToDownMode()
 {
-	prom_printf("[DBG] goToDownMode: entered\n");
+	DEBUG_LOG(("[DBG] goToDownMode: entered\n"));
 #ifndef CONFIG_FPGA_PLATFORM
 #ifndef CONFIG_RTL8198
 		REG32(PIN_MUX_SEL)=REG32(PIN_MUX_SEL)&(0xFFFFFFFF-0x00300000);
@@ -1170,9 +1192,9 @@ void goToDownMode()
 #endif
 
 #ifndef CONFIG_FPGA_PLATFORM
-	prom_printf("[DBG] goToDownMode: calling eth_startup\n");
+	DEBUG_LOG(("[DBG] goToDownMode: calling eth_startup\n"));
 	eth_startup(0);
-	prom_printf("[DBG] goToDownMode: eth_startup returned\n");
+	DEBUG_LOG(("[DBG] goToDownMode: eth_startup returned\n"));
 #endif
 
 #if defined (SW_8366GIGA)
@@ -1185,9 +1207,9 @@ void goToDownMode()
 		cp3_count_print();
 #endif		
 		dprintf("\n---Ethernet init Okay!\n");
-		prom_printf("[DBG] goToDownMode: calling sti\n");
+		DEBUG_LOG(("[DBG] goToDownMode: calling sti\n"));
 		sti();
-		prom_printf("[DBG] goToDownMode: calling tftpd_entry\n");
+		DEBUG_LOG(("[DBG] goToDownMode: calling tftpd_entry\n"));
 		tftpd_entry();
 #ifdef DHCP_SERVER			
 		dhcps_entry();
@@ -1224,6 +1246,7 @@ void goToLocalStartMode(unsigned long addr,IMG_HEADER_Tp pheader)
 	unsigned short *word_ptr;
 	void	(*jump)(void);
 	int i;
+	unsigned char *data_start;
 
 	DEBUG_LOG(("[DBG] goToLocalStartMode: enter addr=%x\n", addr));
 	//prom_printf("\n---%X\n",return_addr);
@@ -1231,25 +1254,38 @@ void goToLocalStartMode(unsigned long addr,IMG_HEADER_Tp pheader)
 	for (i=0; i<sizeof(IMG_HEADER_T); i+=2, word_ptr++)
 	*word_ptr = rtl_inw(addr + i);
 
-	// move image to SDRAM
-	DEBUG_LOG(("[DBG] goToLocalStartMode: flashread start\n"));
-	flashread( pheader->startAddr,	(unsigned int)(addr-FLASH_BASE+sizeof(IMG_HEADER_T)), 	pheader->len-2);
-	DEBUG_LOG(("[DBG] goToLocalStartMode: flashread done, calling user_interrupt\n"));
+	// Diagnostic: print header info
+	DEBUG_LOG(("[DBG2] Image header: sig=%c%c%c%c startAddr=%x len=%x\n",
+		pheader->signature[0], pheader->signature[1],
+		pheader->signature[2], pheader->signature[3],
+		pheader->startAddr, pheader->len));
 
-	if ( !user_interrupt(0) )  // See if user escape during copy image
+	// move image to SDRAM using KSEG1 (uncached) to avoid cache coherency issues
+	DEBUG_LOG(("[DBG2] flashread: dst=%x src=%x len=%x\n",
+		pheader->startAddr | 0x20000000,
+		(unsigned int)(addr-FLASH_BASE+sizeof(IMG_HEADER_T)),
+		pheader->len-2));
+	flashread( pheader->startAddr | 0x20000000,	(unsigned int)(addr-FLASH_BASE+sizeof(IMG_HEADER_T)), 	pheader->len-2);
+	DEBUG_LOG(("[DBG2] flashread done\n"));
+
+	// Diagnostic: check first bytes at destination
+	data_start = (unsigned char *)pheader->startAddr;
+	DEBUG_LOG(("[DBG2] STEP1: data read done\n"));
+	DEBUG_LOG(("[DBG2] first byte: %x\n", data_start[0]));
+
+	if ( !user_interrupt(0) )
 	{
-		DEBUG_LOG(("[DBG] goToLocalStartMode: no ESC, jumping to image\n"));
-		outl(0,GIMR0); // mask all interrupt
+		DEBUG_LOG(("[DBG2] STEP2: no ESC\n"));
+		outl(0,GIMR0);
 #if defined(CONFIG_BOOT_RESET_ENABLE)
 		Set_GPIO_LED_OFF();
 #endif
 #if defined(RTL8196B)
-		REG32(CPUICR)=0xe4000000; //speedup lexra access
+		REG32(CPUICR)=0xe4000000;
 #endif
-#ifdef CONFIG_BOOT_TIME_MEASURE
-		cp3_count_print();
-#endif
-		prom_printf("Jump to image start=0x%x...\n", pheader->startAddr);
+		DEBUG_LOG(("[DBG2] STEP3: about to jump\n"));
+		DEBUG_LOG(("[DBG2] jump addr: %x\n", pheader->startAddr));
+		DEBUG_LOG(("[DBG2] first dword: %x\n", *(unsigned int *)pheader->startAddr));
 
 #ifdef CONFIG_RTL_FLASH_DUAL_IMAGE_ENABLE
 		set_bankinfo_register();
@@ -1258,7 +1294,9 @@ void goToLocalStartMode(unsigned long addr,IMG_HEADER_Tp pheader)
 
 		cli();
 		flush_cache();
-		jump();				 // jump to start
+		DEBUG_LOG(("[DBG2] STEP4: cache flushed\n"));
+		DEBUG_LOG(("[DBG2] STEP5: jumping now\n"));
+		jump();
 		return ;
 	}
 	DEBUG_LOG(("[DBG] goToLocalStartMode: ESC detected during copy, entering download mode\n"));
